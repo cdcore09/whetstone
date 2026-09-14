@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "whetstone",
+  "version": "0.1.0",
+  "description": "Meta-skills that sharpen your other skills: promote repeated code into reusable scripts, audit skill descriptions for ambiguity and overlap, repair skills from failed runs, and require evidence-based verification before an agent returns output.",
+  "author": {
+    "name": "Cordero Core",
+    "url": "https://github.com/cdcore09"
+  },
+  "homepage": "https://github.com/cdcore09/whetstone",
+  "repository": "https://github.com/cdcore09/whetstone",
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "skills",
+    "meta-skills",
+    "dry",
+    "self-improving",
+    "verification",
+    "progressive-disclosure",
+    "skill-audit"
+  ]
+}

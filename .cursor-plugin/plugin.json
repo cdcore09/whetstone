@@ -1,0 +1,6 @@
+{
+  "name": "whetstone",
+  "version": "0.1.0",
+  "description": "Meta-skills that sharpen your other skills: DRY promotion, description audit, skill repair, and verification before return.",
+  "author": { "name": "Cordero Core" }
+}
