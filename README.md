@@ -85,7 +85,14 @@ python3 skills/skill-audit/scripts/audit_skills.py --json     # machine-readable
 python3 skills/skill-audit/scripts/audit_skills.py --threshold 0.25
 ```
 
+It also grades subagent definitions (`agents/*.md`) under the same roots: missing
+`name`, missing or what-without-when descriptions, and fields like `identifier`,
+`whenToUse`, or a skill's `triggers:` list that look like routing metadata but
+are never read.
+
 Exit status is 1 when anything needs attention, so it works as a CI gate.
+
+Tests: `python3 -m unittest discover -s tests`.
 
 Read the output in order. Resolve **duplicate names** first, since duplicates
 distort every number below them. Then **per-skill defects**, where the common

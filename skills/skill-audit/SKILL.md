@@ -23,7 +23,9 @@ python3 ${PLUGIN_ROOT}/skills/skill-audit/scripts/audit_skills.py [ROOT ...]
 ```
 
 With no argument it scans `~/.claude/skills`, `~/.claude/plugins`,
-`./.claude/skills`, `./.agents/skills`, and `./skills`. Standard library only,
+`./.claude/skills`, `./.agents/skills`, and `./skills`. Under the same roots it
+also grades subagent definitions (`agents/*.md`), which route on `name` +
+`description` exactly like skills do. Standard library only,
 so it runs anywhere Python 3.10+ does.
 
 Useful flags: `--threshold` (default 0.35) tunes how much description overlap
@@ -50,6 +52,12 @@ against:
 > announcements, which write-announcement handles.
 
 The second tells the agent when to fire and when to stand down.
+
+**Unread routing fields.** A `triggers:` list on a skill, or `identifier:` /
+`whenToUse:` on an agent, looks like routing metadata but the harness never reads
+it. The fix is to move that text into `name` and `description`, not to delete it.
+An agent with no `name` is skipped outright as a standalone agent; inside a
+plugin it loads under its filename with whatever its `description` says.
 
 **Collisions last.** For each pair, decide which skill owns the request, then
 edit both descriptions so each names a case the other excludes.

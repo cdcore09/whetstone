@@ -4,6 +4,23 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `audit_skills.py` grades subagent definitions (`agents/*.md`) on the same
+  routing surface as skills: missing `name`, missing or thin descriptions,
+  descriptions with no "when" clause, and the unread `identifier` / `whenToUse`
+  fields.
+- Skills carrying an unread `triggers:` list are flagged.
+- Regression tests under `tests/` (standard library `unittest`).
+
+### Fixed
+
+- "Use this skill when" / "use this agent when" were not recognised as trigger
+  language, so correctly written descriptions were flagged. "Use proactively"
+  is also recognised.
+
 ## [0.1.0] - 2026-09-14
 
 ### Added

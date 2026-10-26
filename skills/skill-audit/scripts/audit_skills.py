@@ -5,9 +5,14 @@ Reads every `*/SKILL.md` under the given roots, parses the YAML frontmatter, and
 reports two classes of problem:
 
   1. Per-skill defects — a description an agent cannot route on: missing, too
-     short, no trigger language, or a name that disagrees with its directory.
+     short, no trigger language, a name that disagrees with its directory, or
+     routing text parked in a frontmatter field the harness never reads.
   2. Pairwise collisions — two skills whose descriptions compete for the same
      request, measured by Jaccard overlap on content words.
+
+It also grades subagent definitions (`agents/*.md`) on the same routing surface,
+because a plugin's agents route on `name` + `description` exactly like its
+skills do, and a broken agent header is invisible to a skills-only scan.
 
 Under progressive disclosure an agent sees only `name` and `description` before
 deciding which skill to load, so these two fields are the entire routing
@@ -43,14 +48,29 @@ STOPWORDS = {
 
 # Phrases that tell an agent *when* to fire, not just what the skill does.
 TRIGGER_PATTERNS = [
-    r"\buse (?:this|it) when\b",
+    # "use this when", "use it when", and the very common "use this skill when"
+    # / "use this agent when".
+    r"\buse (?:this|it)(?: (?:skill|agent|tool|command|plugin))? when\b",
     r"\buse when\b",
     r"\bwhen the user\b",
     r"\btrigger(?:s|ed)? (?:on|when)\b",
     r"\binvoke when\b",
     r"\bcall (?:this|it) when\b",
     r"\bfor when\b",
+    # Claude Code's own convention for agents that should be picked unprompted.
+    r"\buse proactively\b",
 ]
+
+# Frontmatter keys that look like routing metadata but that no major harness
+# reads. Text placed here never reaches the router, so it is a silent defect.
+UNREAD_SKILL_KEYS = {
+    "triggers": "move these phrases into `description`",
+}
+UNREAD_AGENT_KEYS = {
+    "identifier": "rename to `name`",
+    "whenToUse": "fold this text into `description`",
+    "triggers": "move these phrases into `description`",
+}
 
 MIN_DESCRIPTION_CHARS = 40
 
@@ -70,6 +90,7 @@ class Skill:
     name: str = ""
     description: str = ""
     defects: list[str] = field(default_factory=list)
+    keys: list[str] = field(default_factory=list)
 
     @property
     def label(self) -> str:
@@ -184,9 +205,83 @@ def find_skills(roots: list[Path]) -> list[Skill]:
                     directory=skill_md.parent.name,
                     name=fm.get("name", ""),
                     description=fm.get("description", ""),
+                    keys=sorted(fm),
                 )
             )
     return skills
+
+
+@dataclass
+class Agent:
+    path: str
+    stem: str
+    name: str = ""
+    description: str = ""
+    has_frontmatter: bool = False
+    defects: list[str] = field(default_factory=list)
+    keys: list[str] = field(default_factory=list)
+
+    @property
+    def label(self) -> str:
+        return self.name or self.stem
+
+
+def find_agents(roots: list[Path]) -> list[Agent]:
+    """Subagent definitions: any `*.md` directly inside a directory named `agents`."""
+    seen: set[Path] = set()
+    agents: list[Agent] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for md in sorted(root.rglob("agents/*.md")):
+            resolved = md.resolve()
+            if resolved in seen or not md.is_file():
+                continue
+            seen.add(resolved)
+            try:
+                text = md.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                print(f"warning: cannot read {md}: {exc}", file=sys.stderr)
+                continue
+            fm = parse_frontmatter(text)
+            agents.append(
+                Agent(
+                    path=str(md),
+                    stem=md.stem,
+                    name=fm.get("name", ""),
+                    description=fm.get("description", ""),
+                    has_frontmatter=bool(fm),
+                    keys=sorted(fm),
+                )
+            )
+    return agents
+
+
+def grade_agent(agent: Agent) -> None:
+    if not agent.has_frontmatter:
+        # README-style notes kept beside agents are common; not a defect.
+        return
+    if not agent.name:
+        agent.defects.append(
+            "no name in frontmatter -- Claude Code skips a standalone agent "
+            "without one, and a plugin agent loads only under its filename"
+        )
+    for key, fix in UNREAD_AGENT_KEYS.items():
+        if key in agent.keys:
+            agent.defects.append(f"'{key}' is not read by the harness; {fix}")
+    if not agent.description:
+        agent.defects.append("no description -- agent cannot be routed to")
+        return
+    if len(agent.description) < MIN_DESCRIPTION_CHARS:
+        agent.defects.append(
+            f"description is {len(agent.description)} chars "
+            f"(under {MIN_DESCRIPTION_CHARS}); too thin to disambiguate"
+        )
+    if not has_trigger_language(agent.description):
+        agent.defects.append(
+            "description says what it does but never when to delegate to it "
+            "(no 'use when' / 'use proactively' clause)"
+        )
 
 
 def grade(skill: Skill) -> None:
@@ -210,6 +305,10 @@ def grade(skill: Skill) -> None:
             "description says what it does but never when to use it "
             "(no 'use when' / 'when the user' clause)"
         )
+
+    for key, fix in UNREAD_SKILL_KEYS.items():
+        if key in skill.keys:
+            skill.defects.append(f"'{key}' is not read by the harness; {fix}")
 
 
 def find_duplicates(skills: list[Skill]) -> dict[str, list[str]]:
@@ -257,16 +356,20 @@ def report(
     collisions: list[Collision],
     duplicates: dict[str, list[str]],
     threshold: float,
+    agents: list[Agent] | None = None,
 ) -> None:
+    agents = agents or []
     flagged = [s for s in skills if s.defects]
+    flagged_agents = [a for a in agents if a.defects]
     width = 66
 
     print()
-    print(f"whetstone skill audit -- {len(skills)} skills scanned")
+    print(f"whetstone skill audit -- {len(skills)} skills, "
+          f"{len(agents)} agents scanned")
     print("-" * width)
 
-    if not skills:
-        print("No SKILL.md files found. Pass a root explicitly.")
+    if not skills and not agents:
+        print("No SKILL.md or agents/*.md files found. Pass a root explicitly.")
         return
 
     no_desc = sum(1 for s in skills if not s.description)
@@ -286,6 +389,8 @@ def report(
     print(f"  duplicate names            {len(duplicates):>4}")
     print(f"  skills with >=1 defect     {len(flagged):>4}"
           f"  ({len(flagged) * 100 // max(len(skills), 1)}%)")
+    print(f"  agents with >=1 defect     {len(flagged_agents):>4}"
+          f"  ({len(flagged_agents) * 100 // max(len(agents), 1)}%)")
     print()
 
     if duplicates:
@@ -321,7 +426,17 @@ def report(
         print("  each description name a case the other explicitly excludes.")
         print()
 
-    if not flagged and not collisions:
+    if flagged_agents:
+        print("Per-agent defects")
+        print("-" * width)
+        for a in flagged_agents:
+            print(f"  {a.label}")
+            print(f"    {a.path}")
+            for d in a.defects:
+                print(f"    - {d}")
+        print()
+
+    if not flagged and not flagged_agents and not collisions:
         print("No defects and no collisions. Nothing to sharpen.")
         print()
 
@@ -349,6 +464,9 @@ def main(argv: list[str] | None = None) -> int:
     skills = find_skills(roots)
     for s in skills:
         grade(s)
+    agents = find_agents(roots)
+    for a in agents:
+        grade_agent(a)
     collisions = find_collisions(skills, args.threshold)
     duplicates = find_duplicates(skills)
 
@@ -361,18 +479,26 @@ def main(argv: list[str] | None = None) -> int:
                 "skills": [asdict(s) for s in skills],
                 "collisions": [asdict(c) for c in collisions],
                 "duplicates": duplicates,
+                "agents": [asdict(a) for a in agents],
             },
             indent=2,
         ))
     elif args.quiet:
         flagged = sum(1 for s in skills if s.defects)
+        flagged_agents = sum(1 for a in agents if a.defects)
         print(f"{len(skills)} scanned, {flagged} flagged, "
-              f"{len(collisions)} collisions, {len(duplicates)} duplicate names")
+              f"{len(collisions)} collisions, {len(duplicates)} duplicate names, "
+              f"{len(agents)} agents, {flagged_agents} agents flagged")
     else:
-        report(skills, collisions, duplicates, args.threshold)
+        report(skills, collisions, duplicates, args.threshold, agents)
 
     # Non-zero when something needs attention, so this can gate CI.
-    return 1 if any(s.defects for s in skills) or collisions or duplicates else 0
+    return 1 if (
+        any(s.defects for s in skills)
+        or any(a.defects for a in agents)
+        or collisions
+        or duplicates
+    ) else 0
 
 
 if __name__ == "__main__":
