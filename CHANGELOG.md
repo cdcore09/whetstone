@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `audit_skills.py` no longer reports a missing description when the value is
+  written as a plain multi-line scalar (`description:` followed by indented
+  lines). The parser kept the empty value and dropped the indented text.
+- The trigger-language check now accepts "use before" alongside "use when".
+
 ## [0.1.0] - 2026-09-14
 
 ### Added

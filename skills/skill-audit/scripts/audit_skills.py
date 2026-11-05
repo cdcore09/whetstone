@@ -45,6 +45,7 @@ STOPWORDS = {
 TRIGGER_PATTERNS = [
     r"\buse (?:this|it) when\b",
     r"\buse when\b",
+    r"\buse before\b",
     r"\bwhen the user\b",
     r"\btrigger(?:s|ed)? (?:on|when)\b",
     r"\binvoke when\b",
@@ -89,10 +90,10 @@ class Collision:
 def parse_frontmatter(text: str) -> dict[str, str]:
     """Extract top-level scalar keys from YAML frontmatter.
 
-    Deliberately not a YAML parser. It handles the three forms that appear in
-    real SKILL.md files -- inline scalars, `|` literal blocks, and `>` folded
-    blocks -- and ignores everything else rather than failing on a file it does
-    not fully understand. A partial read still tells you whether `description`
+    Deliberately not a YAML parser. It handles the four forms that appear in
+    real SKILL.md files -- inline scalars, plain multi-line scalars, `|` literal
+    blocks, and `>` folded blocks -- and ignores everything else rather than
+    failing on a file it does not fully understand. A partial read still tells you whether `description`
     is missing, which is the question being asked.
     """
     if not text.startswith("---"):
@@ -133,7 +134,9 @@ def parse_frontmatter(text: str) -> dict[str, str]:
 
         flush()
         key, value = match.group(1), match.group(2).strip()
-        if value in ("|", ">", "|-", ">-", "|+", ">+"):
+        # An empty value opens a plain multi-line scalar: the text sits on the
+        # indented lines that follow, so collect them like a block scalar.
+        if value in ("", "|", ">", "|-", ">-", "|+", ">+"):
             block_indent = indent + 1
             buffer = []
         else:
