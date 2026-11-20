@@ -43,7 +43,7 @@ STOPWORDS = {
 
 # Phrases that tell an agent *when* to fire, not just what the skill does.
 TRIGGER_PATTERNS = [
-    r"\buse (?:this|it) when\b",
+    r"\buse (?:this|it)(?: skill)? when\b",
     r"\buse when\b",
     r"\buse before\b",
     r"\bwhen the user\b",
