@@ -12,6 +12,9 @@ All notable changes to this project are documented here. Format follows
   written as a plain multi-line scalar (`description:` followed by indented
   lines). The parser kept the empty value and dropped the indented text.
 - The trigger-language check now accepts "use before" alongside "use when".
+- The trigger-language check now accepts "use this skill when". It matched
+  "use this when" and "use it when" only, so descriptions opening with "Use
+  this skill when..." were reported as having no trigger language.
 
 ## [0.1.0] - 2026-09-14
 
